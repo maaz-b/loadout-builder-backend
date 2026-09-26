@@ -41,19 +41,26 @@ const userSchema = Schema(
       default: false,
     },
 
-    savedBuilds: [
-      {
-        type: Schema.Types.ObjectId,
-        ref: "Loadout",
-      },
-    ],
+    savedBuilds: {
+      type: [
+        {
+          type: Schema.Types.ObjectId,
+          ref: "Loadout",
+        },
+      ],
+      validator: [
+        function (val) {
+          return val.length <= 200;
+        },
+      ],
+    },
   },
   { timestamps: true },
 );
 
 userSchema.set("toJSON", {
   transform: (document, returnedObject) => {
-    returnedObject.id = returnedObject._id.toString();
+    returnedObject.id = returnedObject._id;
 
     delete returnedObject._id;
     delete returnedObject.__v;

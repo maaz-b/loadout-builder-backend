@@ -1,4 +1,5 @@
 import { Schema, model } from "mongoose";
+import { classEnums, itemtypeEnums } from "../utls/enums.js";
 
 const itemSchema = Schema(
   {
@@ -9,7 +10,7 @@ const itemSchema = Schema(
     itemType: {
       type: String,
       required: true,
-      enum: ["Weapon", "Gadget", "Throwable"],
+      enum: itemtypeEnums,
     },
     category: {
       type: String,
@@ -19,9 +20,13 @@ const itemSchema = Schema(
       {
         type: String,
         required: true,
-        enum: ["Assault", "Engineer", "Support", "Recon", "All"],
+        enum: classEnums,
       },
     ],
+    imageUrl: {
+      type: String,
+      required: true,
+    },
 
     stats: {
       damage: {

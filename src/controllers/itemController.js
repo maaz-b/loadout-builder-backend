@@ -61,7 +61,8 @@ const deleteItem = async (req, res, next) => {
 };
 
 const createItem = async (req, res, next) => {
-  const { name, itemType, category, classRestriction, stats } = req.body;
+  const { name, itemType, category, classRestriction, imageUrl, stats } =
+    req.body;
 
   try {
     const newItem = !stats
@@ -70,12 +71,14 @@ const createItem = async (req, res, next) => {
           itemType,
           category,
           classRestriction,
+          imageUrl,
         }
       : {
           name,
           itemType,
           category,
           classRestriction,
+          imageUrl,
           stats: {
             damage: stats.damage,
             rpm: stats.rps,
@@ -94,7 +97,8 @@ const createItem = async (req, res, next) => {
 
 const editItem = async (req, res, next) => {
   const id = req.params.id;
-  const { name, itemType, category, classRestriction, stats } = req.body;
+  const { name, itemType, category, classRestriction, imageUrl, stats } =
+    req.body;
 
   try {
     if (!id) {
@@ -107,12 +111,14 @@ const editItem = async (req, res, next) => {
           itemType,
           category,
           classRestriction,
+          imageUrl,
         }
       : {
           name,
           itemType,
           category,
           classRestriction,
+          imageUrl,
           stats: {
             damage: stats.damage,
             rpm: stats.rpm,

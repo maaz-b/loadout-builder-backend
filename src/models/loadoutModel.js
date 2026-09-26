@@ -6,7 +6,12 @@ const loadoutSchema = Schema(
       type: String,
       default: "Custom Loadout",
     },
-    class: {
+    owner: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    loadoutClass: {
       type: String,
       required: true,
       enum: ["Assault", "Engineer", "Support", "Recon"],
@@ -30,6 +35,10 @@ const loadoutSchema = Schema(
       type: Schema.Types.ObjectId,
       ref: "Item",
       required: true,
+    },
+    likeCount: {
+      type: Number,
+      default: 0,
     },
   },
   { timestamps: true },

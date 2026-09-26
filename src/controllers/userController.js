@@ -4,6 +4,8 @@ import { User } from "../models/userModel.js";
 import { checkPasswordStrength } from "../utls/passwordCheck.js";
 import { sendEmail } from "../services/emailService.js";
 import jwt from "jsonwebtoken";
+import { Loadout } from "../models/loadoutModel.js";
+import mongoose from "mongoose";
 
 const createVerificationCode = () => {
   const code = crypto.randomInt(100000, 1000000);
@@ -155,4 +157,62 @@ const login = async (req, res, next) => {
   }
 };
 
-export { register, verifyEmail, login };
+const saveLoadout = async (req, res, next) => {
+  const { loadoutId } = req.body;
+
+  try {
+    if (!loadoutId || !mongoose.Types.ObjectId.isValid(loadoutId)) {
+      return res.status(400).json({ error: "LoadoutId is required" });
+    }
+
+    const exists = await Loadout.exists({ _id: loadoutId });
+
+    if (!exists) {
+      return res.status(404).json({ error: "Loadout not found" });
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      req.userId,
+      { $addToSet: { savedBuilds: loadoutId } },
+      {
+        new: true,
+      },
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    return res.status(200).json(updatedUser);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const unsaveLoadout = async (req, res, next) => {
+  const id = req.params.id;
+
+  try {
+    if (!id) {
+      return res.status(400).json({ error: "LoadoutId is required" });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.userId,
+      {
+        $pull: {
+          savedBuilds: id,
+        },
+      },
+      {
+        new: true,
+      },
+    );
+
+    return res.status(200).json(user);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export { register, verifyEmail, login, saveLoadout, unsaveLoadout };
