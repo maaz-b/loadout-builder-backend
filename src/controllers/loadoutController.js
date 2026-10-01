@@ -9,8 +9,10 @@ const getAll = async (req, res, next) => {
   const skip = (page - 1) * limit;
 
   try {
-    const loadouts = await Loadout.find().skip(skip).limit(limit).lean();
-    const totalItems = await Loadout.countDocuments();
+    const [loadouts, totalItems] = await Promise.all([
+      Loadout.find().skip(skip).limit(limit).lean(),
+      Loadout.countDocuments(),
+    ]);
     const totalPages = Math.ceil(totalItems / limit);
 
     const hasNextPage = page < totalPages;
@@ -42,6 +44,54 @@ const getAll = async (req, res, next) => {
         hasNextPage,
         hasPreviousPage,
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getPopular = async (req, res, next) => {
+  const page = Number(req.query.page) || 1;
+  const limit = Number(req.query.limit) || 20;
+  const skip = limit * (page - 1);
+
+  try {
+    const [loadouts, totalItems] = await Promise.all([
+      Loadout.find({})
+        .sort({ likeCount: -1, _id: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Loadout.countDocuments(),
+    ]);
+    const totalPages = Math.ceil(totalItems / limit);
+    const hasNextPage = page < totalPages;
+    const hasPreviousPage = page > 1;
+
+    const loadoutIds = loadouts.map((loadout) => loadout._id);
+
+    const likes = await LoadoutLike.find({
+      userId: req.userId,
+      loadoutId: {
+        $in: loadoutIds,
+      },
+    }).lean();
+
+    const likesSet = new Set(likes.map((like) => like.loadoutId.toString()));
+
+    const loadoutsWithLikes = loadouts.map((loadout) => ({
+      ...loadout,
+      isLiked: likesSet.has(loadout._id.toString()),
+    }));
+
+    return res.status(200).json({
+      loadouts: loadoutsWithLikes,
+      page,
+      limit,
+      totalItems,
+      totalPages,
+      hasNextPage,
+      hasPreviousPage,
     });
   } catch (error) {
     next(error);
@@ -299,4 +349,12 @@ const likeLoadout = async (req, res, next) => {
   }
 };
 
-export { getAll, getOne, deleteOne, createLoadout, editLoadout, likeLoadout };
+export {
+  getAll,
+  getOne,
+  deleteOne,
+  createLoadout,
+  editLoadout,
+  likeLoadout,
+  getPopular,
+};
