@@ -1,6 +1,7 @@
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 import { User } from "../models/userModel.js";
+import { Session } from "../models/sessionModel.js";
 import { checkPasswordStrength } from "../utls/passwordCheck.js";
 import { sendEmail } from "../services/emailService.js";
 import jwt from "jsonwebtoken";
@@ -12,11 +13,69 @@ const createVerificationCode = () => {
   return code;
 };
 
-const generateJwt = (userId) => {
-  const token = jwt.sign({ userId }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRY,
+const generateAccessJwt = (userId) => {
+  const token = jwt.sign({ userId }, process.env.JWT_ACCESS_SECRET, {
+    expiresIn: process.env.JWT_ACCESS_EXPIRY,
   });
   return token;
+};
+
+const hashToken = (token) => {
+  return crypto.createHash("sha256").update(token).digest("hex");
+};
+
+const generateRefreshJwt = async (userId) => {
+  const token = jwt.sign({ userId }, process.env.JWT_REFRESH_SECRET, {
+    expiresIn: process.env.JWT_REFRESH_EXPIRY,
+  });
+  const expiresAt = new Date(); // Get current datetime
+  expiresAt.setDate(expiresAt.getDate() + 7);
+  const tokenHash = hashToken(token);
+  await Session.create({
+    userId: userId,
+    tokenHash: tokenHash,
+    expiresAt,
+  });
+
+  return token;
+};
+
+const refreshToken = async (req, res, next) => {
+  try {
+    const { refreshToken } = req.body;
+    if (!refreshToken) {
+      return res.status(400).json({ error: "Refresh token not provided." });
+    }
+
+    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+    const uId = decoded.userId;
+
+    const tokenHash = hashToken(refreshToken);
+
+    const deletedSession = await Session.findOneAndDelete({
+      userId: uId,
+      tokenHash: tokenHash,
+    });
+    if (!deletedSession) {
+      await Session.deleteMany();
+      return res
+        .status(401)
+        .json({ error: "Invalid refresh token, please login again" });
+    }
+
+    const access = generateAccessJwt(uId);
+    const refresh = await generateRefreshJwt(uId);
+
+    return res.status(200).json({ access, refresh });
+  } catch (error) {
+    console.log(error);
+    if (error.name === "TokenExpiredError") {
+      return res
+        .status(401)
+        .json({ error: "Token expired. Please log in again." });
+    }
+    next(error);
+  }
 };
 
 const register = async (req, res, next) => {
@@ -96,11 +155,11 @@ const verifyEmail = async (req, res, next) => {
       });
     }
 
-    if (user.isEmailVerified) {
-      return res.status(400).json({
-        error: "User already verified",
-      });
-    }
+    // if (user.isEmailVerified) {
+    //   return res.status(400).json({
+    //     error: "User already verified",
+    //   });
+    // }
 
     if (!user.verificationCode || user.verificationCode !== code) {
       return res.status(400).json({
@@ -119,9 +178,10 @@ const verifyEmail = async (req, res, next) => {
     user.verificationCodeExpiry = undefined;
 
     await user.save();
-    const token = generateJwt(user._id);
+    const accessToken = generateAccessJwt(user._id);
+    const refreshToken = await generateRefreshJwt(user._id);
 
-    return res.status(200).json({ token, user });
+    return res.status(200).json({ token: accessToken, refreshToken, user });
   } catch (error) {
     console.log(error);
     next(error);
@@ -148,9 +208,28 @@ const login = async (req, res, next) => {
       res.status(400).json({ error: "Invalid email or password" });
     }
 
-    const token = generateJwt(user._id);
+    const verificationCode = createVerificationCode();
 
-    return res.status(200).json({ token, user });
+    const verificationCodeExpiry = Date.now() + 5 * 60 * 1000;
+
+    user.verificationCode = verificationCode;
+    user.verificationCodeExpiry = verificationCodeExpiry;
+
+    await user.save();
+
+    await sendEmail(
+      user.name,
+      email.trim().toLowerCase(),
+      "Frag Forge verification Code",
+      {
+        title: "Verify your email",
+        body: `Your verification code is <strong style="color:#ffffff; font-size:20px;">${verificationCode}</strong>. This code expires in 5 minutes.`,
+      },
+    );
+
+    return res.status(200).json({
+      message: `Verification email sent to ${email.trim().toLowerCase()}`,
+    });
   } catch (error) {
     console.log(error);
     next(error);
@@ -215,4 +294,11 @@ const unsaveLoadout = async (req, res, next) => {
   }
 };
 
-export { register, verifyEmail, login, saveLoadout, unsaveLoadout };
+export {
+  register,
+  verifyEmail,
+  login,
+  saveLoadout,
+  unsaveLoadout,
+  refreshToken,
+};
